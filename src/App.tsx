@@ -34,7 +34,7 @@ function App() {
       setMessage(newText);
 
       const newCursorPosition =
-        textBeforeMention.length + name.length + lastName.length + 2;
+        textBeforeMention.length + name.length + lastName.length + 3;
       setTimeout(() => {
         value.setSelectionRange(newCursorPosition, newCursorPosition);
         value.focus();
