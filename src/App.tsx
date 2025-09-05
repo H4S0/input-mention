@@ -105,14 +105,48 @@ function App() {
 
           const cursorPosition = value.selectionStart || 0;
           const textUntilCursor = value.value.slice(0, cursorPosition);
-          const match = textUntilCursor.match(/@(\w*)$/);
+
+          const match = textUntilCursor.match(/@([A-Za-z0-9 ]*)$/);
           const charBeforeMatch = match?.index
             ? textUntilCursor[match.index - 1]
             : null;
 
-          if ((match && charBeforeMatch === ' ') || match?.index === 0) {
+          if (!match) {
+            setShowSuggestions(false);
+            setQuery('');
+            return;
+          }
+
+          const mentionText = value.value.slice(match.index, cursorPosition);
+          const mentionTextLength = mentionText.length - 1;
+          const spaceCount = (mentionText.match(/ /g) || []).length;
+
+          if (spaceCount > 1) {
+            setShowSuggestions(false);
+            setQuery('');
+            return;
+          }
+
+          const [firstToken, secondToken = ''] = (match[1] ?? '').split(' ');
+
+          if (secondToken) {
+            const matchedLastname = users.some((u) =>
+              u.lastName?.toLowerCase().startsWith(secondToken?.toLowerCase())
+            );
+            if (!matchedLastname) {
+              setShowSuggestions(false);
+              setQuery('');
+              return;
+            }
+          }
+
+          if (
+            (match && charBeforeMatch === ' ') ||
+            match?.index === 0 ||
+            (mentionText[mentionTextLength] === ' ' && spaceCount === 1)
+          ) {
             setShowSuggestions(true);
-            setQuery(match[1]);
+            setQuery(firstToken);
             setHighlightIndex(0);
           } else {
             setShowSuggestions(false);
