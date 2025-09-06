@@ -1,19 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import './index.css';
 
 const users = [
   { id: 1, name: 'Alice', lastName: 'Smith' },
   { id: 2, name: 'Bob', lastName: 'Johnson' },
   { id: 3, name: 'Charlie', lastName: 'Brown' },
+  { id: 4, name: 'Hasan', lastName: 'Alic' },
 ];
 
-type Mention = {
+interface Mention {
   id: number;
   start: number;
   end: number;
-  userId: number;
   text: string;
-};
+  userId: number;
+}
 
 function App() {
   const [message, setMessage] = useState('');
@@ -21,50 +22,53 @@ function App() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [query, setQuery] = useState('');
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState(0);
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [editingMentionId, setEditingMentionId] = useState<number | null>(null);
-  const [cursosPosition, setCursorPosition] = useState<number>(0);
 
   const filteredUser = users.filter((user) =>
     user.name.toLowerCase().includes(query.toLowerCase())
   );
 
+  // Track cursor position
   const handleCursorMove = () => {
     if (inputRef.current) {
       setCursorPosition(inputRef.current.selectionStart || 0);
     }
   };
 
+  // Check if cursor is on a mention
   useEffect(() => {
     if (!inputRef.current) return;
 
-    const mentionUnderCursos = mentions.find(
+    // Check if cursor is on any existing mention
+    const mentionUnderCursor = mentions.find(
       (mention) =>
-        cursosPosition >= mention.start && cursosPosition <= mention.end
+        cursorPosition >= mention.start && cursorPosition <= mention.end
     );
 
-    if (mentionUnderCursos) {
-      const userUnderCursos = users.find(
-        (u) => u.id === mentionUnderCursos.userId
-      );
-
-      if (userUnderCursos) {
+    if (mentionUnderCursor) {
+      const user = users.find((u) => u.id === mentionUnderCursor.userId);
+      if (user) {
+        setQuery(user.name);
         setShowSuggestions(true);
-        setQuery(userUnderCursos.name);
-        setEditingMentionId(userUnderCursos.id);
-      } else {
-        setEditingMentionId(null);
+        setEditingMentionId(mentionUnderCursor.id);
+        setHighlightIndex(0);
+      }
+    } else {
+      setEditingMentionId(null);
 
-        const textUntilCursor = inputRef.current.value.slice(0, cursosPosition);
-        const newMentionMatch = textUntilCursor.match(/@(\w*)$/);
-        if (!newMentionMatch) {
-          setShowSuggestions(false);
-          setQuery('');
-        }
+      // Only hide if we're not creating a new mention
+      const textUntilCursor = inputRef.current.value.slice(0, cursorPosition);
+      const newMentionMatch = textUntilCursor.match(/@(\w*)$/);
+      if (!newMentionMatch) {
+        setShowSuggestions(false);
+        setQuery('');
       }
     }
-  }, [cursosPosition, mentions]);
+  }, [cursorPosition, mentions]);
 
+  // Update mentions when message changes
   useEffect(() => {
     const newMentions: Mention[] = [];
     const mentionRegex = /@([A-Za-z]+ [A-Za-z]+)/g;
@@ -72,38 +76,39 @@ function App() {
 
     while ((match = mentionRegex.exec(message)) !== null) {
       const user = users.find(
-        (u) => `${u.name} ${u.lastName}`.toLowerCase() === match[1]
+        (u) =>
+          `${u.name} ${u.lastName}`.toLowerCase() === match[1].toLowerCase()
       );
 
       if (user) {
         newMentions.push({
-          id: Date.now() + newMentions.length,
+          id: Date.now() + newMentions.length, // Simple unique ID
           start: match.index,
           end: match.index + match[0].length,
           text: match[0],
           userId: user.id,
         });
       }
-
-      setMentions(newMentions);
     }
+
+    setMentions(newMentions);
   }, [message]);
 
   const handleSelectMention = (name: string, lastName: string) => {
     const value = inputRef.current;
     if (!value) return;
 
-    const cursorPosition = value.selectionStart || 0;
-    const textUntilCursor = value.value.slice(0, cursorPosition);
+    const cursorPos = value.selectionStart || 0;
+    const textUntilCursor = value.value.slice(0, cursorPos);
 
     if (editingMentionId) {
+      // Editing existing mention
       const mentionToEdit = mentions.find((m) => m.id === editingMentionId);
-
       if (mentionToEdit) {
         const textBeforeMention = value.value.slice(0, mentionToEdit.start);
         const textAfterMention = value.value.slice(mentionToEdit.end);
 
-        const newText = `${textBeforeMention}@${name}${textAfterMention}`;
+        const newText = `${textBeforeMention}@${name} ${lastName}${textAfterMention}`;
         setMessage(newText);
 
         const newCursorPosition =
@@ -119,10 +124,11 @@ function App() {
         }, 0);
       }
     } else {
+      // Creating new mention
       const match = textUntilCursor.match(/@(\w*)$/);
       if (match && match.index !== undefined) {
         const textBeforeMention = textUntilCursor.slice(0, match.index);
-        const textAfterCursor = value.value.slice(cursorPosition);
+        const textAfterCursor = value.value.slice(cursorPos);
 
         const newText = `${textBeforeMention}@${name} ${lastName} ${textAfterCursor}`;
         setMessage(newText);
@@ -166,6 +172,10 @@ function App() {
             filteredUser[highlightIndex].lastName
           );
         }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSuggestions(false);
+        setEditingMentionId(null);
       }
     }
   };
@@ -174,64 +184,24 @@ function App() {
     const value = inputRef.current;
     if (!value) return;
     setMessage(value.value);
+    setCursorPosition(value.selectionStart || 0);
 
+    // Check for new mention pattern only if we're not editing an existing mention
     if (!editingMentionId) {
-      const mentionRegex = /@([A-Za-z0-9 ]+)/g;
-      const mentionsInText = [];
-      let m;
-      while ((m = mentionRegex.exec(value.value)) !== null) {
-        mentionsInText.push({
-          start: m.index,
-          end: m.index + m[0].length,
-          text: m[0],
-        });
-      }
+      const cursorPos = value.selectionStart || 0;
+      const textUntilCursor = value.value.slice(0, cursorPos);
+      const match = textUntilCursor.match(/@(\w*)$/);
 
-      const cursorPosition = value.selectionStart || 0;
-      const textUntilCursor = value.value.slice(0, cursorPosition);
+      if (match) {
+        const charBeforeMatch = match.index
+          ? textUntilCursor[match.index - 1]
+          : null;
 
-      const match = textUntilCursor.match(/@([A-Za-z0-9 ]*)$/);
-      const charBeforeMatch = match?.index
-        ? textUntilCursor[match.index - 1]
-        : null;
-
-      if (!match) {
-        setShowSuggestions(false);
-        setQuery('');
-        return;
-      }
-
-      const mentionText = value.value.slice(match.index, cursorPosition);
-      const mentionTextLength = mentionText.length - 1;
-      const spaceCount = (mentionText.match(/ /g) || []).length;
-
-      if (spaceCount > 1) {
-        setShowSuggestions(false);
-        setQuery('');
-        return;
-      }
-
-      const [firstToken, secondToken = ''] = (match[1] ?? '').split(' ');
-
-      if (secondToken) {
-        const matchedLastname = users.some((u) =>
-          u.lastName?.toLowerCase().startsWith(secondToken?.toLowerCase())
-        );
-        if (!matchedLastname) {
-          setShowSuggestions(false);
-          setQuery('');
-          return;
+        if ((match && charBeforeMatch === ' ') || match?.index === 0) {
+          setShowSuggestions(true);
+          setQuery(match[1]);
+          setHighlightIndex(0);
         }
-      }
-
-      if (
-        (match && charBeforeMatch === ' ') ||
-        match?.index === 0 ||
-        (mentionText[mentionTextLength] === ' ' && spaceCount === 1)
-      ) {
-        setShowSuggestions(true);
-        setQuery(firstToken);
-        setHighlightIndex(0);
       } else {
         setShowSuggestions(false);
         setQuery('');
@@ -268,11 +238,18 @@ function App() {
         ref={inputRef}
         value={message}
         onKeyDown={handleMentionKeyDown}
+        onChange={handleInputChange}
         onSelect={handleCursorMove}
         onClick={handleCursorMove}
         onKeyUp={handleCursorMove}
-        onChange={handleInputChange}
       />
+
+      {/* Debug info */}
+      <div className="mt-4 p-3 bg-gray-200 rounded-lg text-xs">
+        <div>Cursor: {cursorPosition}</div>
+        <div>Mentions: {JSON.stringify(mentions)}</div>
+        <div>Editing: {editingMentionId}</div>
+      </div>
     </div>
   );
 }
