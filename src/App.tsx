@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 import './index.css';
 
 const users = [
@@ -29,6 +29,13 @@ function App() {
   const filteredUser = users.filter((user) =>
     user.name.toLowerCase().includes(query.toLowerCase())
   );
+
+  const isMentionComplete = (mentionText: string): boolean => {
+    const mentionWithoutAt = mentionText.slice(1);
+
+    const parts = mentionWithoutAt.split(' ');
+    return parts.length >= 2 && parts[0].length > 0 && parts[1].length > 0;
+  };
 
   const handleCursorMove = () => {
     if (inputRef.current) {
@@ -166,6 +173,40 @@ function App() {
     setEditingMentionId(null);
 
     setTimeout(() => setJustSelectedMention(false), 100);
+  };
+
+  const getStyledMessage = () => {
+    if (mentions.length === 0) return message;
+
+    let lastIndex = 0;
+    const elements: JSX.Element[] = [];
+
+    mentions.forEach((mention, index) => {
+      if (mention.start > lastIndex) {
+        const textBefore = message.slice(lastIndex, mention.start);
+        elements.push(<span key={`text-before-${index}`}>{textBefore}</span>);
+      }
+      const mentionText = message.slice(mention.start, mention.end);
+      const isComplete = isMentionComplete(mentionText);
+
+      elements.push(
+        <span
+          key={`mention-${mention.id}`}
+          className={isComplete ? 'mention-highlight' : ''}
+        >
+          {mentionText}
+        </span>
+      );
+
+      lastIndex = mention.end;
+    });
+
+    if (lastIndex < message.length) {
+      const remainingText = message.slice(lastIndex);
+      elements.push(<span key="text-end">{remainingText}</span>);
+    }
+
+    return elements;
   };
 
   const handleMentionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
