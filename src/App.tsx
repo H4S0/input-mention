@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import './index.css';
 
 const users = [
   { id: 1, name: 'Alice', lastName: 'Smith' },
@@ -25,6 +24,7 @@ function App() {
   const [editingMentionId, setEditingMentionId] = useState<number | null>(null);
   const [cursorPosition, setCursorPosition] = useState<number>(0);
   const [justSelectedMention, setJustSelectedMention] = useState(false);
+  const [isFocused, setIsFocused] = useState(false); // NEW: Track focus state
 
   const filteredUser = users.filter((user) =>
     user.name.toLowerCase().includes(query.toLowerCase())
@@ -32,7 +32,6 @@ function App() {
 
   const isMentionComplete = (mentionText: string): boolean => {
     const mentionWithoutAt = mentionText.slice(1);
-
     const parts = mentionWithoutAt.split(' ');
     return parts.length >= 2 && parts[0].length > 0 && parts[1].length > 0;
   };
@@ -176,7 +175,16 @@ function App() {
   };
 
   const getStyledMessage = () => {
-    if (mentions.length === 0) return message;
+    if (mentions.length === 0) {
+      return (
+        <>
+          {message}
+          {isFocused && (
+            <span className="inline-block w-0.5 h-5 bg-blue-500 align-middle animate-pulse ml-1"></span>
+          )}
+        </>
+      );
+    }
 
     let lastIndex = 0;
     const elements: JSX.Element[] = [];
@@ -186,13 +194,18 @@ function App() {
         const textBefore = message.slice(lastIndex, mention.start);
         elements.push(<span key={`text-before-${index}`}>{textBefore}</span>);
       }
+
       const mentionText = message.slice(mention.start, mention.end);
       const isComplete = isMentionComplete(mentionText);
 
       elements.push(
         <span
           key={`mention-${mention.id}`}
-          className={isComplete ? 'mention-highlight' : ''}
+          className={
+            isComplete
+              ? 'bg-blue-100 text-blue-800 px-1 rounded border border-blue-200 mx-0.5'
+              : 'mx-0.5'
+          }
         >
           {mentionText}
         </span>
@@ -204,6 +217,16 @@ function App() {
     if (lastIndex < message.length) {
       const remainingText = message.slice(lastIndex);
       elements.push(<span key="text-end">{remainingText}</span>);
+    }
+
+    // Add cursor
+    if (isFocused) {
+      elements.push(
+        <span
+          key="cursor"
+          className="inline-block w-0.5 h-5 bg-blue-500 align-middle animate-pulse ml-1"
+        ></span>
+      );
     }
 
     return elements;
@@ -280,19 +303,32 @@ function App() {
     }
   };
 
+  const handleFocus = () => {
+    setIsFocused(true);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">
-        User Mention Input
+        User Mention Input with Highlighting
       </h1>
 
       {showSuggestions && (
-        <div className="mb-4 border border-gray-300 rounded-lg bg-white w-52">
+        <div className="mb-4 border border-gray-300 rounded-lg bg-white w-52 shadow-lg z-10">
           {filteredUser.map((user, index) => (
             <div
               key={user.id}
-              className={`cursor-pointer p-2 ${
-                index === highlightIndex ? 'bg-gray-200' : 'hover:bg-gray-100'
+              className={`cursor-pointer p-2 transition-colors duration-150 ${
+                index === highlightIndex
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'hover:bg-gray-100'
               }`}
               onClick={() => handleSelectMention(user.name, user.lastName)}
             >
@@ -302,25 +338,40 @@ function App() {
         </div>
       )}
 
-      <input
-        type="text"
-        placeholder="Mention someone..."
-        className="w-72 p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        ref={inputRef}
-        value={message}
-        onKeyDown={handleMentionKeyDown}
-        onSelect={handleCursorMove}
-        onClick={handleCursorMove}
-        onKeyUp={handleCursorMove}
-        onChange={handleInputChange}
-      />
+      {/* Visible container that looks like an input */}
+      <div
+        className="relative w-72 p-3 border border-gray-300 rounded-lg shadow-sm bg-white min-h-12 cursor-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+        onClick={handleFocus}
+        onBlur={handleBlur}
+        tabIndex={0}
+      >
+        {/* Hidden input for actual typing */}
+        <input
+          type="text"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-text"
+          ref={inputRef}
+          value={message}
+          onKeyDown={handleMentionKeyDown}
+          onChange={handleInputChange}
+          onSelect={handleCursorMove}
+          onClick={handleCursorMove}
+          onKeyUp={handleCursorMove}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+        />
+
+        {/* Styled content with cursor */}
+        <div className="whitespace-pre-wrap break-words">
+          {getStyledMessage()}
+        </div>
+      </div>
 
       <div className="mt-4 p-3 bg-gray-200 rounded-lg text-xs">
         <div>Cursor: {cursorPosition}</div>
-        <div>Mentions: {JSON.stringify(mentions)}</div>
+        <div>Mentions: {mentions.length}</div>
         <div>Editing: {editingMentionId}</div>
         <div>Query: {query}</div>
-        <div>Just Selected: {justSelectedMention ? 'Yes' : 'No'}</div>
+        <div>Focused: {isFocused ? 'Yes' : 'No'}</div>
       </div>
     </div>
   );
