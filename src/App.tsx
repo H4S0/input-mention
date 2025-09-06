@@ -23,7 +23,7 @@ function App() {
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [editingMentionId, setEditingMentionId] = useState<number | null>(null);
-  const [cursosPosition, setCursorPosition] = useState<number>(0);
+  const [cursorPosition, setCursorPosition] = useState<number>(0);
 
   const filteredUser = users.filter((user) =>
     user.name.toLowerCase().includes(query.toLowerCase())
@@ -40,7 +40,7 @@ function App() {
 
     const mentionUnderCursos = mentions.find(
       (mention) =>
-        cursosPosition >= mention.start && cursosPosition <= mention.end
+        cursorPosition >= mention.start && cursorPosition <= mention.end
     );
 
     if (mentionUnderCursos) {
@@ -52,10 +52,11 @@ function App() {
         setShowSuggestions(true);
         setQuery(userUnderCursos.name);
         setEditingMentionId(userUnderCursos.id);
+        setHighlightIndex(0);
       } else {
         setEditingMentionId(null);
 
-        const textUntilCursor = inputRef.current.value.slice(0, cursosPosition);
+        const textUntilCursor = inputRef.current.value.slice(0, cursorPosition);
         const newMentionMatch = textUntilCursor.match(/@(\w*)$/);
         if (!newMentionMatch) {
           setShowSuggestions(false);
@@ -63,7 +64,7 @@ function App() {
         }
       }
     }
-  }, [cursosPosition, mentions]);
+  }, [cursorPosition, mentions]);
 
   useEffect(() => {
     const newMentions: Mention[] = [];
@@ -72,7 +73,8 @@ function App() {
 
     while ((match = mentionRegex.exec(message)) !== null) {
       const user = users.find(
-        (u) => `${u.name} ${u.lastName}`.toLowerCase() === match[1]
+        (u) =>
+          `${u.name} ${u.lastName}`.toLowerCase() === match[1].toLowerCase()
       );
 
       if (user) {
@@ -93,8 +95,8 @@ function App() {
     const value = inputRef.current;
     if (!value) return;
 
-    const cursorPosition = value.selectionStart || 0;
-    const textUntilCursor = value.value.slice(0, cursorPosition);
+    const cursorPos = value.selectionStart || 0;
+    const textUntilCursor = value.value.slice(0, cursorPos);
 
     if (editingMentionId) {
       const mentionToEdit = mentions.find((m) => m.id === editingMentionId);
@@ -120,9 +122,10 @@ function App() {
       }
     } else {
       const match = textUntilCursor.match(/@(\w*)$/);
+
       if (match && match.index !== undefined) {
         const textBeforeMention = textUntilCursor.slice(0, match.index);
-        const textAfterCursor = value.value.slice(cursorPosition);
+        const textAfterCursor = value.value.slice(cursorPos);
 
         const newText = `${textBeforeMention}@${name} ${lastName} ${textAfterCursor}`;
         setMessage(newText);
@@ -166,6 +169,10 @@ function App() {
             filteredUser[highlightIndex].lastName
           );
         }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSuggestions(false);
+        setEditingMentionId(null);
       }
     }
   };
@@ -174,6 +181,7 @@ function App() {
     const value = inputRef.current;
     if (!value) return;
     setMessage(value.value);
+    setCursorPosition(value.selectionStart || 0);
 
     if (!editingMentionId) {
       const mentionRegex = /@([A-Za-z0-9 ]+)/g;
@@ -187,7 +195,6 @@ function App() {
         });
       }
 
-      const cursorPosition = value.selectionStart || 0;
       const textUntilCursor = value.value.slice(0, cursorPosition);
 
       const match = textUntilCursor.match(/@([A-Za-z0-9 ]*)$/);
